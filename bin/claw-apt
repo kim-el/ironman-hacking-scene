@@ -1,0 +1,69 @@
+#!/bin/bash
+# claw-apt — streaming claw with hacker aesthetic
+set -uo pipefail
+trap 'echo ""; exec zsh' ERR
+
+QUERY="${1:-}"
+[ -z "$QUERY" ] && { echo "Usage: claw-apt <query>"; exit 1; }
+export CLAW_WEB_SEARCH_BASE_URL="${CLAUDE_WEB_SEARCH_URL:-http://127.0.0.1:8889}"
+
+C='\033[0;36m' G='\033[0;32m' R='\033[0;31m'
+Y='\033[0;33m' M='\033[0;35m' W='\033[1;37m' D='\033[2m' N='\033[0m'
+
+echo ""
+echo -e "  ${C}▌${N} ${W}TARGET${N}  ${QUERY}"
+echo -e "  ${C}▌${N} ${D}$(date '+%H:%M:%S')${N}  ${C}▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀${N}"
+echo ""
+
+START=$(date +%s)
+
+# Run claw in background
+TMPFILE=$(mktemp)
+script -q /dev/null /opt/homebrew/bin/claw "$QUERY" > "$TMPFILE" 2>&1 &
+CLAW_PID=$!
+
+# Live pulsing progress bar
+SPINNER=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+CHARS=('▁' '▂' '▃' '▄' '▅' '▆' '▇' '█' '▇' '▆' '▅' '▄' '▃' '▂')
+MSGS=("establishing secure connection" "querying knowledge base" "scanning information sources" "processing retrieved data" "compiling response")
+si=0; ci=0; mi=0; last_msg=0
+
+while kill -0 "$CLAW_PID" 2>/dev/null; do
+    SPIN="${SPINNER[$si]}"
+    BAR=""
+    for j in $(seq 0 15); do
+        BAR="${BAR}${CHARS[$(( (ci + j) % ${#CHARS[@]} ))]}"
+    done
+    NOW=$(date +%s)
+    [ $((NOW - last_msg)) -ge 3 ] && { mi=$(( (mi + 1) % ${#MSGS[@]} )); last_msg=$NOW; }
+    ELAPSED=$((NOW - START))
+    printf "\r  ${C}${BAR}${N} ${SPIN} ${MSGS[$mi]} ${D}[%ds]${N}\033[K" "$ELAPSED"
+    si=$(( (si + 1) % ${#SPINNER[@]} ))
+    ci=$(( (ci + 1) % ${#CHARS[@]} ))
+    sleep 0.08
+done
+printf "\r\033[K"
+
+# Typewriter the answer
+RAW=$(cat "$TMPFILE" | sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' | tr '\r' '\n' | tr -s ' ')
+rm -f "$TMPFILE"
+
+echo ""
+while IFS= read -r line; do
+    [ -z "$(echo "$line" | tr -d ' ')" ] && continue
+    [[ "$line" == ">"* ]] && continue
+    [[ "$line" == *"Done" ]] && continue
+    # Typewrite character by character
+    for ((i=0; i<${#line}; i++)); do
+        printf "%s" "${line:$i:1}"
+        sleep 0.003 2>/dev/null || true
+    done
+    echo ""
+done <<< "$RAW"
+
+ELAPSED=$(($(date +%s) - START))
+echo ""
+echo -e "  ${C}▌${N} ${G}COMPLETE${N}  ${D}${ELAPSED}s${N}"
+echo -e "  ${C}▌${N}"
+echo ""
+exec zsh

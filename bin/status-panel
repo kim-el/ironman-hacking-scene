@@ -1,0 +1,78 @@
+#!/bin/bash
+# status-panel — spawns a kitty monitor window for active tasks
+# Called by Claude Code hooks
+set -euo pipefail
+
+TOOL="${1:-unknown}"
+FILE="${2:-unknown}"
+CONTEXT="${3:-}"
+
+SOCKET="${KITTY_SOCKET:-unix:/tmp/mykitty}"
+
+# Debounce — avoid spawning too many windows
+LOCK_DIR="/tmp/status-panel-locks"
+mkdir -p "$LOCK_DIR"
+HASH=$(echo "$FILE" | md5 2>/dev/null || echo "$FILE" | md5sum | cut -d' ' -f1)
+LOCK="$LOCK_DIR/$HASH"
+
+# If a panel for this file already exists and is < 5 seconds old, skip
+if [ -f "$LOCK" ]; then
+    AGE=$(($(date +%s) - $(stat -f %m "$LOCK" 2>/dev/null || echo 0)))
+    if [ "$AGE" -lt 5 ]; then
+        exit 0
+    fi
+fi
+touch "$LOCK"
+
+# Count existing status windows, cap at 5
+PANEL_COUNT=$(pgrep -f "status-panel-active" 2>/dev/null | wc -l | tr -d ' ')
+if [ "$PANEL_COUNT" -ge 5 ]; then
+    exit 0
+fi
+
+# Determine type icon and color
+case "$TOOL" in
+    write|edit|Write|Edit)
+        ICON="📝" STAGE="Editing"
+        ;;
+    bash|Bash)
+        ICON="⚡" STAGE="Running"
+        ;;
+    read|Read)
+        ICON="👁" STAGE="Reading"
+        ;;
+    verify|Verify)
+        ICON="🔍" STAGE="Verifying"
+        ;;
+    *)
+        ICON="●" STAGE="$TOOL"
+        ;;
+esac
+
+FN=$(basename "$FILE" | cut -c1-40)
+
+# Spawn the panel window
+kitty @ --to "$SOCKET" launch --type=os-window --hold \
+    --title "▶ $STAGE: $FN" \
+    bash -c "
+        echo ''
+        echo '  ╔══════════════════════════════════╗'
+        echo '  ║  $ICON  TASK MONITOR             ║'
+        echo '  ╚══════════════════════════════════╝'
+        echo ''
+        echo '  Stage:    $STAGE'
+        echo '  File:     $FN'
+        echo '  Context:  ${CONTEXT:0:60}'
+        echo '  PID:      \$\$'
+        echo ''
+        echo '  ────────────────────────────────'
+        echo '  Active panels: $PANEL_COUNT/5'
+        echo ''
+        echo '  ▶ Auto-closes in 30s or press Enter'
+        echo ''
+        # Mark this process so we can count it
+        exec -a status-panel-active read -t 30
+    " 2>/dev/null
+
+# Cleanup old locks (>30 seconds)
+find "$LOCK_DIR" -mmin +1 -delete 2>/dev/null || true

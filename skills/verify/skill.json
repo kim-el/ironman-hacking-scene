@@ -1,0 +1,12 @@
+{
+  "name": "verify",
+  "description": "Verification engineering harness: generates property-based tests, builds interaction matrices for compositional testing, runs fix-retry loops, spawns adversarial sub-agents, and reports PASS/FAIL with all fixes documented.",
+  "triggers": [
+    "/verify",
+    "verify this",
+    "run verification",
+    "property test",
+    "test this code",
+    "find bugs in this"
+  ]
+}
