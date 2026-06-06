@@ -86,6 +86,21 @@ Usage: `/verify <file_or_directory>` in Claude Code.
 - **Theme**: Claude Code-inspired (Tokyo Night derivative)
 - **Search**: Wikipedia API proxy (Python, ~5 MB)
 
+## Roadmap
+
+**Current limitation:** All 5 windows pulse identically with the same "scanning/processing/compiling" animation regardless of what's actually happening. It's a beautiful demo, but it's cosplaying — a dorky pulse pretending to be busy.
+
+**Next phase — task-aware reactive grid:**
+
+Instead of 5 static windows, the grid should react to real task events via Claude Code hooks (`PostToolUse`):
+
+1. **Window content reflects actual work** — progress bar shows real phases (not canned messages), answer text is what the agent is actually doing, windows spawn/close based on active tasks
+2. **Different tasks = different visuals** — file write vs bash execution vs verification vs web search each get distinct color/icon/animation patterns
+3. **No more all-same-pulse dork mode** — if 3 windows are idle and 2 are working, the grid reflects that. If a build fails, a window goes red. If verification passes, green. Live state, not canned animation.
+4. **Hook-driven spawn/kill** — `/spawn` enables dynamic window creation on tool use, `/cancel` kills all panels. Debounced, capped at 5. Already wired in `settings.json`, needs the env var passthrough fixed.
+
+The pulse was proof the streaming works. Next is making it honest.
+
 ## License
 
 MIT — hack freely.
